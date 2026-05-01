@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Solar System</title>
+
+  <!-- A-Frame + AR.js — these two imports are ALL you need -->
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+    /* ── Top hint bar ── */
+    #hint {
+      position: fixed; top: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.72);
+      color: #fff; padding: 10px 22px;
+      border-radius: 30px; font-size: 14px; font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.18);
+      pointer-events: none;
+      transition: opacity 0.6s;
+      z-index: 100;
+      white-space: nowrap;
+    }
+
+    /* ── Marker helper button ── */
+    #marker-btn {
+      position: fixed; top: 20px; right: 20px;
+      background: rgba(255,255,255,0.12);
+      color: #fff; border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 10px; padding: 8px 14px;
+      font-size: 13px; cursor: pointer; z-index: 100;
+      backdrop-filter: blur(6px);
+    }
+    #marker-btn:hover { background: rgba(255,255,255,0.22); }
+
+    /* ── Marker modal ── */
+    #marker-modal {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 200;
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+    }
+    #marker-modal.open { display: flex; }
+    #marker-modal h3 { color: #fff; font-size: 18px; font-weight: 600; }
+    #marker-modal p  { color: rgba(255,255,255,0.6); font-size: 13px; text-align: center; max-width: 300px; }
+    #marker-modal img { width: 200px; height: 200px; background: #fff; padding: 12px; border-radius: 12px; }
+    #marker-modal button {
+      background: rgba(255,255,255,0.15);
+      color: #fff; border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px; padding: 10px 28px;
+      font-size: 14px; cursor: pointer;
+    }
+
+    /* ── Planet info card ── */
+    #planet-card {
+      position: fixed; bottom: 28px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(8, 12, 35, 0.93);
+      border: 1px solid rgba(100,160,255,0.25);
+      border-radius: 18px;
+      padding: 20px 22px 18px;
+      width: 310px;
+      display: none;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    .card-header h2 { color: #fff; font-size: 22px; font-weight: 700; }
+    .card-close {
+      color: rgba(255,255,255,0.45); font-size: 20px;
+      cursor: pointer; line-height: 1; padding: 2px 4px;
+    }
+    .card-close:hover { color: #fff; }
+
+    .card-badge {
+      display: inline-block;
+      background: rgba(80,140,255,0.2);
+      color: #88AAFF;
+      border-radius: 6px; padding: 3px 10px;
+      font-size: 12px; font-weight: 500;
+      margin-bottom: 14px;
+    }
+
+    .card-stats {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 14px;
+    }
+    .stat-item { }
+    .stat-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 2px; }
+    .stat-value { font-size: 14px; color: #fff; font-weight: 500; }
+
+    .card-fact {
+      font-size: 13px; color: rgba(255,215,80,0.9);
+      line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 12px;
+    }
+
+    /* ── Speed control ── */
+    #speed-ctrl {
+      position: fixed; bottom: 28px; right: 20px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px; padding: 12px 14px;
+      z-index: 100; color: #fff;
+    }
+    #speed-ctrl label { font-size: 12px; color: rgba(255,255,255,0.5); display: block; margin-bottom: 6px; }
+    #speed-ctrl input { width: 100%; accent-color: #5588ff; cursor: pointer; }
+    #speed-ctrl span { font-size: 12px; color: #88aaff; font-weight: 600; display: block; text-align: center; margin-top: 4px; }
+  </style>
+</head>
+
+<body>
+
+<!-- ── UI Overlays ── -->
+<div id="hint">📷 Point at the Hiro marker to launch the solar system</div>
+<button id="marker-btn" onclick="toggleMarkerModal()">Show Hiro Marker</button>
+
+<div id="marker-modal">
+  <h3>Hiro Marker</h3>
+  <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Hiro marker">
+  <p>Print this or show it on another screen. Point your phone camera at it.</p>
+  <button onclick="toggleMarkerModal()">Close</button>
+</div>
+
+<div id="planet-card">
+  <div class="card-header">
+    <h2 id="pc-name">Earth</h2>
+    <span class="card-close" onclick="closeCard()">✕</span>
+  </div>
+  <div class="card-badge" id="pc-type">Terrestrial</div>
+  <div class="card-stats">
+    <div class="stat-item">
+      <div class="stat-label">Distance from Sun</div>
+      <div class="stat-value" id="pc-dist">—</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Day length</div>
+      <div class="stat-value" id="pc-day">—</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Year length</div>
+      <div class="stat-value" id="pc-year">—</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Moons</div>
+      <div class="stat-value" id="pc-moons">—</div>
+    </div>
+  </div>
+  <div class="card-fact" id="pc-fact"></div>
+</div>
+
+<div id="speed-ctrl">
+  <label>Orbit Speed</label>
+  <input type="range" id="speed-slider" min="0.2" max="5" step="0.1" value="1" oninput="updateSpeed(this.value)">
+  <span id="speed-label">1×</span>
+</div>
+
+
+<!-- ════════════════════════════════════════════
+     THE ACTUAL AR SCENE — This is the magic part
+     ════════════════════════════════════════════ -->
+<a-scene
+  vr-mode-ui="enabled: false"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
+  renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true;"
+  loading-screen="enabled: false"
+>
+
+  <a-marker preset="hiro" id="main-marker">
+
+    <!-- Lighting: ambient + point light from the Sun -->
+    <a-light type="ambient"  color="#ffffff" intensity="0.35"></a-light>
+    <a-light type="point" position="0 0.12 0" color="#FFD080" intensity="2.5" distance="6" decay="1"></a-light>
+
+    <!-- ══════ SUN ══════ -->
+    <a-entity id="sun-grp" position="0 0 0">
+      <!-- Outer glow -->
+      <a-sphere radius="0.082"
+        color="#FF8C00"
+        material="opacity:0.18; transparent:true; side:back; depthWrite:false">
+      </a-sphere>
+      <!-- Sun body -->
+      <a-sphere id="sun" class="planet" radius="0.065"
+        color="#FDB813"
+        material="emissive:#FF5500; emissiveIntensity:0.55; roughness:0.7"
+        position="0 0.12 0">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ══════ ORBIT RINGS (thin white circles on the XZ plane) ══════ -->
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.145" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.210" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.285" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.365" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.490" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.630" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.765" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.890" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
+
+    <!-- ══════ MERCURY ══════ -->
+    <a-entity id="orb-mercury" class="orbit"
+      data-base-dur="4000"
+      animation="property:rotation; to:0 360 0; dur:4000; loop:true; easing:linear">
+      <a-sphere id="mercury" class="planet" radius="0.013"
+        position="0.145 0.12 0"
+        color="#B7B8B9"
+        material="roughness:0.9; metalness:0.1">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ══════ VENUS ══════ -->
+    <a-entity id="orb-venus" class="orbit"
+      data-base-dur="7000"
+      animation="property:rotation; to:0 360 0; dur:7000; loop:true; easing:linear">
+      <a-sphere id="venus" class="planet" radius="0.022"
+        position="0.210 0.12 0"
+        color="#E8C37A"
+        material="roughness:0.6; emissive:#C08820; emissiveIntensity:0.05">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ══════ EARTH ══════ -->
+    <a-entity id="orb-earth" class="orbit"
+      data-base-dur="10000"
+      animation="property:rotation; to:0 360 0; dur:10000; loop:true; easing:linear">
+      <a-entity position="0.285 0.12 0">
+        <a-sphere id="earth" class="planet" radius="0.026"
+          color="#1A6FB0"
+          material="roughness:0.7; emissive:#082040; emissiveIntensity:0.08">
+        </a-sphere>
+        <!-- green landmass tint -->
+        <a-sphere radius="0.0265"
+          color="#2D7A3A"
+          material="opacity:0.35; transparent:true; roughness:1">
+        </a-sphere>
+        <!-- Moon orbit -->
+        <a-entity animation="property:rotation; to:0 360 0; dur:2700; loop:true; easing:linear">
+          <a-sphere radius="0.007" position="0.05 0 0" color="#CCCCCC"></a-sphere>
+        </a-entity>
+      </a-entity>
+    </a-entity>
+
+    <!-- ══════ MARS ══════ -->
+    <a-entity id="orb-mars" class="orbit"
+      data-base-dur="15000"
+      animation="property:rotation; to:0 360 0; dur:15000; loop:true; easing:linear">
+      <a-sphere id="mars" class="planet" radius="0.018"
+        position="0.365 0.12 0"
+        color="#C1440E"
+        material="roughness:0.9">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ══════ JUPITER ══════ -->
+    <a-entity id="orb-jupiter" class="orbit"
+      data-base-dur="24000"
+      animation="property:rotation; to:0 360 0; dur:24000; loop:true; easing:linear">
+      <a-entity position="0.490 0.12 0">
+        <a-sphere id="jupiter" class="planet" radius="0.060"
+          color="#C88B3A"
+          material="roughness:0.85">
+        </a-sphere>
+        <!-- Great Red Spot band hint -->
+        <a-torus radius="0.038" radius-tubular="0.010"
+          rotation="0 0 90"
+          color="#8B3A1A"
+          material="opacity:0.45; transparent:true; side:double">
+        </a-torus>
+      </a-entity>
+    </a-entity>
+
+    <!-- ══════ SATURN + RINGS ══════ -->
+    <a-entity id="orb-saturn" class="orbit"
+      data-base-dur="36000"
+      animation="property:rotation; to:0 360 0; dur:36000; loop:true; easing:linear">
+      <a-entity position="0.630 0.12 0">
+        <a-sphere id="saturn" class="planet" radius="0.050"
+          color="#E4D191"
+          material="roughness:0.8">
+        </a-sphere>
+        <!-- Ring — outer -->
+        <a-torus radius="0.086" radius-tubular="0.022"
+          rotation="78 0 0"
+          color="#D4B86A"
+          material="opacity:0.70; transparent:true; side:double; roughness:1">
+        </a-torus>
+        <!-- Ring — inner darker -->
+        <a-torus radius="0.066" radius-tubular="0.010"
+          rotation="78 0 0"
+          color="#A08040"
+          material="opacity:0.50; transparent:true; side:double; roughness:1">
+        </a-torus>
+      </a-entity>
+    </a-entity>
+
+    <!-- ══════ URANUS ══════ -->
+    <a-entity id="orb-uranus" class="orbit"
+      data-base-dur="50000"
+      animation="property:rotation; to:0 360 0; dur:50000; loop:true; easing:linear">
+      <a-sphere id="uranus" class="planet" radius="0.034"
+        position="0.765 0.12 0"
+        color="#7DE8E8"
+        material="roughness:0.5; emissive:#1A8080; emissiveIntensity:0.06">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ══════ NEPTUNE ══════ -->
+    <a-entity id="orb-neptune" class="orbit"
+      data-base-dur="68000"
+      animation="property:rotation; to:0 360 0; dur:68000; loop:true; easing:linear">
+      <a-sphere id="neptune" class="planet" radius="0.031"
+        position="0.890 0.12 0"
+        color="#3F54BA"
+        material="roughness:0.5; emissive:#1A2555; emissiveIntensity:0.10">
+      </a-sphere>
+    </a-entity>
+
+  </a-marker>
+
+  <!-- Camera with raycaster for click detection -->
+  <a-entity camera>
+    <a-entity
+      cursor="fuse: false"
+      raycaster="objects: .planet; recursive: false; far: 20"
+    ></a-entity>
+  </a-entity>
+</a-scene>
+
+
+<!-- ════════════════════════════════════════
+     JAVASCRIPT
+     ════════════════════════════════════════ -->
+<script>
+// ── Planet data ──────────────────────────────────────────────────────────────
+const PLANETS = {
+  sun:     { name:'Sun',     type:'⭐ Star',                dist:'Center',       day:'25–36 Earth days', year:'N/A',            moons:'0',  fact:'Contains 99.86% of all mass in the solar system.' },
+  mercury: { name:'Mercury', type:'🪨 Terrestrial planet', dist:'57.9M km',     day:'59 Earth days',   year:'88 Earth days',  moons:'0',  fact:'Surface temperatures swing from −180°C to +430°C.' },
+  venus:   { name:'Venus',   type:'🪨 Terrestrial planet', dist:'108.2M km',    day:'243 Earth days',  year:'225 Earth days', moons:'0',  fact:'Hottest planet at 462°C — hotter than Mercury!' },
+  earth:   { name:'Earth',   type:'🪨 Terrestrial planet', dist:'149.6M km',    day:'24 hours',        year:'365.25 days',    moons:'1',  fact:'Only known planet with liquid water and life.' },
+  mars:    { name:'Mars',    type:'🪨 Terrestrial planet', dist:'227.9M km',    day:'24.6 hours',      year:'687 Earth days', moons:'2',  fact:'Home to Olympus Mons, the tallest volcano in the solar system (21 km).' },
+  jupiter: { name:'Jupiter', type:'🌀 Gas giant',          dist:'778.5M km',    day:'9.9 hours',       year:'12 Earth years', moons:'95', fact:'Great Red Spot is a storm that has raged for over 350 years.' },
+  saturn:  { name:'Saturn',  type:'🌀 Gas giant',          dist:'1.43B km',     day:'10.7 hours',      year:'29 Earth years', moons:'146',fact:'Its rings extend 282,000 km but are only ~1 km thick.' },
+  uranus:  { name:'Uranus',  type:'🧊 Ice giant',          dist:'2.87B km',     day:'17.2 hours',      year:'84 Earth years', moons:'28', fact:'Rotates on its side — axial tilt of 98°.' },
+  neptune: { name:'Neptune', type:'🧊 Ice giant',          dist:'4.5B km',      day:'16.1 hours',      year:'165 Earth years',moons:'16', fact:'Winds reach 2,100 km/h — fastest in the solar system.' },
+};
+
+// ── Show/hide planet info card ────────────────────────────────────────────────
+function showCard(id) {
+  const d = PLANETS[id];
+  if (!d) return;
+  document.getElementById('pc-name').textContent  = d.name;
+  document.getElementById('pc-type').textContent  = d.type;
+  document.getElementById('pc-dist').textContent  = d.dist;
+  document.getElementById('pc-day').textContent   = d.day;
+  document.getElementById('pc-year').textContent  = d.year;
+  document.getElementById('pc-moons').textContent = d.moons;
+  document.getElementById('pc-fact').textContent  = d.fact;
+  document.getElementById('planet-card').style.display = 'block';
+}
+function closeCard() {
+  document.getElementById('planet-card').style.display = 'none';
+}
+
+// ── Attach click listeners to planets ────────────────────────────────────────
+document.querySelectorAll('.planet').forEach(el => {
+  el.addEventListener('click', () => showCard(el.id));
+});
+
+// ── Marker found / lost hints ─────────────────────────────────────────────────
+const hint = document.getElementById('hint');
+document.getElementById('main-marker').addEventListener('markerFound', () => {
+  hint.style.opacity = '0';
+});
+document.getElementById('main-marker').addEventListener('markerLost', () => {
+  hint.style.opacity = '1';
+  closeCard();
+});
+
+// ── Hiro marker modal ─────────────────────────────────────────────────────────
+function toggleMarkerModal() {
+  document.getElementById('marker-modal').classList.toggle('open');
+}
+
+// ── Orbit speed control ───────────────────────────────────────────────────────
+function updateSpeed(val) {
+  const multiplier = parseFloat(val);
+  document.getElementById('speed-label').textContent = multiplier.toFixed(1) + '×';
+
+  document.querySelectorAll('.orbit').forEach(el => {
+    const baseDur = parseInt(el.dataset.baseDur);
+    const newDur = Math.round(baseDur / multiplier);
+
+    // Restart animation with new duration
+    const anim = el.getAttribute('animation');
+    el.removeAttribute('animation');
+    setTimeout(() => {
+      el.setAttribute('animation', {
+        ...anim,
+        property: 'rotation',
+        to: '0 360 0',
+        dur: newDur,
+        loop: true,
+        easing: 'linear',
+      });
+    }, 50);
+  });
+}
+</script>
+
+</body>
+</html>
