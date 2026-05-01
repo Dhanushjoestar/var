@@ -1,423 +1,826 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>AR Solar System</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AR Solar System — Deep Space Explorer</title>
+<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{overflow:hidden;background:#000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
 
-  <!-- A-Frame + AR.js — these two imports are ALL you need -->
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.5/aframe/build/aframe-ar.js"></script>
+/* ── HUD Top Bar ── */
+#hud{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(0,0,12,0.82);border-bottom:1px solid rgba(80,140,255,0.2);padding:9px 14px;display:flex;align-items:center;justify-content:space-between}
+#hud-title{color:#fff;font-size:14px;font-weight:600;letter-spacing:.3px}
+#hud-sub{font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px}
+#hud-status{font-size:11px;font-weight:500;color:rgba(255,255,255,0.4);text-align:right}
+#hud-status.live{color:#4ade80}
+#hud-marker-btn{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:7px;padding:5px 11px;font-size:12px;cursor:pointer;margin-top:3px;display:block}
 
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { overflow: hidden; background: #000; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+/* ── System Overview Chips (top-left when no planet selected) ── */
+#sys-chips{position:fixed;top:52px;left:10px;z-index:90;display:flex;flex-direction:column;gap:5px;pointer-events:none}
+.sys-chip{background:rgba(0,0,12,0.72);border:0.5px solid rgba(80,140,255,0.18);border-radius:8px;padding:6px 10px}
+.sys-chip-label{font-size:9px;color:rgba(255,255,255,0.38);text-transform:uppercase;letter-spacing:.05em}
+.sys-chip-val{font-size:14px;font-weight:600;color:#fff;line-height:1.2}
+.sys-chip-sub{font-size:9px;color:rgba(255,255,255,0.35)}
 
-    /* ── Top hint bar ── */
-    #hint {
-      position: fixed; top: 20px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.72);
-      color: #fff; padding: 10px 22px;
-      border-radius: 30px; font-size: 14px; font-weight: 500;
-      border: 1px solid rgba(255,255,255,0.18);
-      pointer-events: none;
-      transition: opacity 0.6s;
-      z-index: 100;
-      white-space: nowrap;
-    }
+/* ── Bottom Controls ── */
+#ctrl-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(0,0,12,0.82);border-top:1px solid rgba(80,140,255,0.2);padding:8px 12px;display:flex;align-items:center;gap:10px}
+.ctrl-lbl{font-size:10px;color:rgba(255,255,255,0.4);white-space:nowrap}
+#speed-sl{flex:1;accent-color:#3b82f6}
+#speed-val{font-size:11px;color:#60a5fa;min-width:28px;text-align:right;font-weight:600}
+.cbtn{padding:5px 9px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.65);white-space:nowrap;transition:all .15s}
+.cbtn.on{background:rgba(59,130,246,0.22);border-color:rgba(59,130,246,0.5);color:#93c5fd}
 
-    /* ── Marker helper button ── */
-    #marker-btn {
-      position: fixed; top: 20px; right: 20px;
-      background: rgba(255,255,255,0.12);
-      color: #fff; border: 1px solid rgba(255,255,255,0.25);
-      border-radius: 10px; padding: 8px 14px;
-      font-size: 13px; cursor: pointer; z-index: 100;
-      backdrop-filter: blur(6px);
-    }
-    #marker-btn:hover { background: rgba(255,255,255,0.22); }
+/* ── Info Panel (bottom sheet) ── */
+#info-panel{position:fixed;bottom:40px;left:0;right:0;height:68vh;z-index:95;background:rgba(4,6,22,0.97);border-top:1px solid rgba(80,140,255,0.25);border-radius:16px 16px 0 0;display:flex;flex-direction:column;transform:translateY(102%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+#info-panel.open{transform:translateY(0)}
 
-    /* ── Marker modal ── */
-    #marker-modal {
-      display: none;
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.85);
-      z-index: 200;
-      align-items: center; justify-content: center;
-      flex-direction: column; gap: 16px;
-    }
-    #marker-modal.open { display: flex; }
-    #marker-modal h3 { color: #fff; font-size: 18px; font-weight: 600; }
-    #marker-modal p  { color: rgba(255,255,255,0.6); font-size: 13px; text-align: center; max-width: 300px; }
-    #marker-modal img { width: 200px; height: 200px; background: #fff; padding: 12px; border-radius: 12px; }
-    #marker-modal button {
-      background: rgba(255,255,255,0.15);
-      color: #fff; border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 10px; padding: 10px 28px;
-      font-size: 14px; cursor: pointer;
-    }
+/* drag handle */
+.panel-handle{width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:10px auto 0;flex-shrink:0;cursor:pointer}
 
-    /* ── Planet info card ── */
-    #planet-card {
-      position: fixed; bottom: 28px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(8, 12, 35, 0.93);
-      border: 1px solid rgba(100,160,255,0.25);
-      border-radius: 18px;
-      padding: 20px 22px 18px;
-      width: 310px;
-      display: none;
-      z-index: 100;
-      backdrop-filter: blur(10px);
-    }
+/* panel header */
+.ph{padding:10px 16px 8px;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;position:relative}
+.ph-name{font-size:21px;font-weight:700;color:#fff}
+.ph-badges{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500}
+.badge-type{background:rgba(59,130,246,0.22);color:#93c5fd}
+.badge-order{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.55)}
+.ph-close{position:absolute;top:10px;right:14px;color:rgba(255,255,255,0.38);font-size:20px;cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+.ph-close:hover{color:#fff;background:rgba(255,255,255,0.1)}
 
-    .card-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      margin-bottom: 4px;
-    }
-    .card-header h2 { color: #fff; font-size: 22px; font-weight: 700; }
-    .card-close {
-      color: rgba(255,255,255,0.45); font-size: 20px;
-      cursor: pointer; line-height: 1; padding: 2px 4px;
-    }
-    .card-close:hover { color: #fff; }
+/* tabs */
+.tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;color:rgba(255,255,255,0.38);border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
+.tab.on{color:#60a5fa;border-bottom-color:#3b82f6}
 
-    .card-badge {
-      display: inline-block;
-      background: rgba(80,140,255,0.2);
-      color: #88AAFF;
-      border-radius: 6px; padding: 3px 10px;
-      font-size: 12px; font-weight: 500;
-      margin-bottom: 14px;
-    }
+/* panel body */
+.pbody{flex:1;overflow-y:auto;padding:14px 16px}
+.pbody::-webkit-scrollbar{width:3px}
+.pbody::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:2px}
+.tc{display:none}.tc.on{display:block}
 
-    .card-stats {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 10px; margin-bottom: 14px;
-    }
-    .stat-item { }
-    .stat-label { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 2px; }
-    .stat-value { font-size: 14px; color: #fff; font-weight: 500; }
+/* stat grid */
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
+.sc{background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:8px;padding:9px 10px}
+.sc-lbl{font-size:9px;color:rgba(255,255,255,0.38);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.sc-val{font-size:13px;font-weight:500;color:#fff;line-height:1.3}
+.sc-cmp{font-size:10px;color:rgba(100,200,130,0.8);margin-top:2px}
 
-    .card-fact {
-      font-size: 13px; color: rgba(255,215,80,0.9);
-      line-height: 1.5; border-top: 1px solid rgba(255,255,255,0.08);
-      padding-top: 12px;
-    }
+/* gravity section */
+.sec-head{font-size:10px;font-weight:500;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.06em;margin:0 0 8px}
+.gbar-bg{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;margin:5px 0 3px}
+.gbar-fill{height:100%;border-radius:4px;background:linear-gradient(to right,#3b82f6,#60a5fa);transition:width .5s ease}
+.gbar-scale{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,0.28)}
 
-    /* ── Speed control ── */
-    #speed-ctrl {
-      position: fixed; bottom: 28px; right: 20px;
-      background: rgba(0,0,0,0.7);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 12px; padding: 12px 14px;
-      z-index: 100; color: #fff;
-    }
-    #speed-ctrl label { font-size: 12px; color: rgba(255,255,255,0.5); display: block; margin-bottom: 6px; }
-    #speed-ctrl input { width: 100%; accent-color: #5588ff; cursor: pointer; }
-    #speed-ctrl span { font-size: 12px; color: #88aaff; font-weight: 600; display: block; text-align: center; margin-top: 4px; }
-  </style>
+/* atm bars */
+.arow{margin-bottom:9px}
+.arow-top{display:flex;justify-content:space-between;margin-bottom:3px}
+.agas{font-size:12px;color:rgba(255,255,255,0.8)}
+.apct{font-size:12px;color:rgba(255,255,255,0.45)}
+.abg{height:5px;background:rgba(255,255,255,0.07);border-radius:3px}
+.afill{height:5px;border-radius:3px;transition:width .5s}
+
+/* moons table */
+.mtbl{width:100%;border-collapse:collapse}
+.mtbl th{font-size:9px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.05em;padding:0 0 7px;text-align:left;border-bottom:0.5px solid rgba(255,255,255,0.08)}
+.mtbl td{font-size:11px;color:rgba(255,255,255,0.75);padding:6px 6px 6px 0;border-bottom:0.5px solid rgba(255,255,255,0.04);vertical-align:top}
+.mtbl td:first-child{font-weight:600;color:#fff}
+.moon-footer{font-size:11px;color:rgba(255,255,255,0.35);margin-top:9px;font-style:italic;line-height:1.5}
+
+/* missions */
+.mitem{display:flex;gap:10px;margin-bottom:12px}
+.mdot{width:7px;height:7px;border-radius:50%;background:#3b82f6;margin-top:4px;flex-shrink:0}
+.myear{font-size:11px;font-weight:700;color:#60a5fa;min-width:34px}
+.mname{font-size:13px;font-weight:500;color:#fff}
+.mdesc{font-size:11px;color:rgba(255,255,255,0.42);margin-top:1px;line-height:1.4}
+
+/* facts */
+.fcard{background:rgba(255,180,0,0.07);border:0.5px solid rgba(255,180,0,0.18);border-radius:10px;padding:13px;margin-bottom:9px}
+.fnum{font-size:9px;color:rgba(255,180,0,0.55);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.ftxt{font-size:13px;color:rgba(255,255,255,0.88);line-height:1.6}
+
+/* info box */
+.ibox{background:rgba(255,255,255,0.04);border-radius:8px;padding:11px 13px;margin-top:10px}
+.itxt{font-size:12px;color:rgba(255,255,255,0.6);line-height:1.6}
+
+/* marker modal */
+#mmodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:200;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+#mmodal.open{display:flex}
+#mmodal h3{color:#fff;font-size:17px;font-weight:600}
+#mmodal img{width:170px;background:#fff;padding:10px;border-radius:10px}
+#mmodal p{color:rgba(255,255,255,0.5);font-size:13px;text-align:center;max-width:270px;line-height:1.5}
+#mmodal button{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:8px;padding:9px 24px;font-size:13px;cursor:pointer}
+</style>
 </head>
-
 <body>
 
-<!-- ── UI Overlays ── -->
-<div id="hint">📷 Point at the Hiro marker to launch the solar system</div>
-<button id="marker-btn" onclick="toggleMarkerModal()">Show Hiro Marker</button>
+<!-- HUD -->
+<div id="hud">
+  <div>
+    <div id="hud-title">☀ AR Solar System — Deep Space Explorer</div>
+    <div id="hud-sub">Tap any planet for detailed scientific data</div>
+  </div>
+  <div style="text-align:right">
+    <div id="hud-status">Searching for marker...</div>
+    <button id="hud-marker-btn" onclick="toggleModal()">Show Hiro Marker</button>
+  </div>
+</div>
 
-<div id="marker-modal">
-  <h3>Hiro Marker</h3>
+<!-- System chips -->
+<div id="sys-chips">
+  <div class="sys-chip"><div class="sys-chip-label">Planets</div><div class="sys-chip-val">8</div><div class="sys-chip-sub">in solar system</div></div>
+  <div class="sys-chip"><div class="sys-chip-label">Known Moons</div><div class="sys-chip-val">290+</div><div class="sys-chip-sub">natural satellites</div></div>
+  <div class="sys-chip"><div class="sys-chip-label">System Age</div><div class="sys-chip-val">4.6B yrs</div><div class="sys-chip-sub">formed from nebula</div></div>
+  <div class="sys-chip"><div class="sys-chip-label">Sun Mass Share</div><div class="sys-chip-val">99.86%</div><div class="sys-chip-sub">of all solar mass</div></div>
+</div>
+
+<!-- Info panel (bottom sheet) -->
+<div id="info-panel">
+  <div class="panel-handle" onclick="closePanel()"></div>
+  <div class="ph">
+    <div class="ph-name" id="pp-name">—</div>
+    <div class="ph-badges">
+      <span class="badge badge-type" id="pp-type">—</span>
+      <span class="badge badge-order" id="pp-order">—</span>
+    </div>
+    <span class="ph-close" onclick="closePanel()">✕</span>
+  </div>
+  <div class="tabs">
+    <div class="tab on" onclick="switchTab('overview')">Overview</div>
+    <div class="tab" onclick="switchTab('atmosphere')">Atmosphere</div>
+    <div class="tab" onclick="switchTab('moons')">Moons</div>
+    <div class="tab" onclick="switchTab('missions')">Missions</div>
+    <div class="tab" onclick="switchTab('facts')">Key Facts</div>
+  </div>
+  <div class="pbody">
+    <div class="tc on" id="tc-overview">
+      <div class="sgrid" id="stat-grid"></div>
+      <p class="sec-head">Surface Gravity vs Earth</p>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;color:#fff" id="gval">—</span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.38)" id="gnote">—</span>
+      </div>
+      <div class="gbar-bg"><div class="gbar-fill" id="gbar" style="width:40%"></div></div>
+      <div class="gbar-scale"><span>0g</span><span>Earth 1g</span><span>Jupiter 2.53g</span></div>
+      <div class="ibox" style="margin-top:14px"><p class="itxt" id="overview-note">—</p></div>
+    </div>
+    <div class="tc" id="tc-atmosphere">
+      <p class="sec-head" style="margin-bottom:12px">Atmospheric Composition</p>
+      <div id="atm-bars"></div>
+      <div class="ibox"><p class="itxt" id="atm-fact">—</p></div>
+    </div>
+    <div class="tc" id="tc-moons"><div id="moons-div"></div></div>
+    <div class="tc" id="tc-missions">
+      <p class="sec-head" style="margin-bottom:12px">Spacecraft Missions</p>
+      <div id="miss-list"></div>
+    </div>
+    <div class="tc" id="tc-facts"><div id="facts-div"></div></div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div id="ctrl-bar">
+  <span class="ctrl-lbl">Orbit speed</span>
+  <input type="range" id="speed-sl" min="0.2" max="8" step="0.1" value="1" oninput="updateSpeed(this.value)">
+  <span id="speed-val">1.0×</span>
+  <button class="cbtn on" id="lbtn" onclick="toggleLabels()">Labels</button>
+  <button class="cbtn on" id="rbtn" onclick="toggleRings()">Orbits</button>
+  <button class="cbtn" onclick="toggleModal()">Marker</button>
+</div>
+
+<!-- Marker modal -->
+<div id="mmodal">
+  <h3>Hiro AR Marker</h3>
   <img src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" alt="Hiro marker">
-  <p>Print this or show it on another screen. Point your phone camera at it.</p>
-  <button onclick="toggleMarkerModal()">Close</button>
+  <p>Print this or display on a laptop screen. Point your phone camera at it to launch the solar system.</p>
+  <button onclick="toggleModal()">Close</button>
 </div>
 
-<div id="planet-card">
-  <div class="card-header">
-    <h2 id="pc-name">Earth</h2>
-    <span class="card-close" onclick="closeCard()">✕</span>
-  </div>
-  <div class="card-badge" id="pc-type">Terrestrial</div>
-  <div class="card-stats">
-    <div class="stat-item">
-      <div class="stat-label">Distance from Sun</div>
-      <div class="stat-value" id="pc-dist">—</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Day length</div>
-      <div class="stat-value" id="pc-day">—</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Year length</div>
-      <div class="stat-value" id="pc-year">—</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-label">Moons</div>
-      <div class="stat-value" id="pc-moons">—</div>
-    </div>
-  </div>
-  <div class="card-fact" id="pc-fact"></div>
-</div>
-
-<div id="speed-ctrl">
-  <label>Orbit Speed</label>
-  <input type="range" id="speed-slider" min="0.2" max="5" step="0.1" value="1" oninput="updateSpeed(this.value)">
-  <span id="speed-label">1×</span>
-</div>
-
-
-<!-- ════════════════════════════════════════════
-     THE ACTUAL AR SCENE — This is the magic part
-     ════════════════════════════════════════════ -->
-<a-scene
-  vr-mode-ui="enabled: false"
-  embedded
-  arjs="sourceType: webcam; debugUIEnabled: false;"
-  renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true;"
-  loading-screen="enabled: false"
->
+<!-- ══════════════════════════════════════
+     AR SCENE
+══════════════════════════════════════ -->
+<a-scene vr-mode-ui="enabled:false" embedded arjs="sourceType:webcam;debugUIEnabled:false;" renderer="logarithmicDepthBuffer:true;precision:medium;antialias:true;" loading-screen="enabled:false">
 
   <a-marker preset="hiro" id="main-marker">
-
-    <!-- Lighting: ambient + point light from the Sun -->
-    <a-light type="ambient"  color="#ffffff" intensity="0.35"></a-light>
+    <a-light type="ambient" color="#fff" intensity="0.3"></a-light>
     <a-light type="point" position="0 0.12 0" color="#FFD080" intensity="2.5" distance="6" decay="1"></a-light>
 
-    <!-- ══════ SUN ══════ -->
-    <a-entity id="sun-grp" position="0 0 0">
-      <!-- Outer glow -->
-      <a-sphere radius="0.082"
-        color="#FF8C00"
-        material="opacity:0.18; transparent:true; side:back; depthWrite:false">
-      </a-sphere>
-      <!-- Sun body -->
-      <a-sphere id="sun" class="planet" radius="0.065"
-        color="#FDB813"
-        material="emissive:#FF5500; emissiveIntensity:0.55; roughness:0.7"
-        position="0 0.12 0">
-      </a-sphere>
+    <!-- ══ SUN ══ -->
+    <a-entity position="0 0 0">
+      <a-sphere radius="0.080" color="#FF8000" material="opacity:.13;transparent:true;side:back;depthWrite:false" position="0 0.12 0"></a-sphere>
+      <a-sphere id="sun" class="planet" radius="0.065" color="#FDB813" material="emissive:#FF5000;emissiveIntensity:.55" position="0 0.12 0"></a-sphere>
+      <a-text value="Sun" position="0 0.22 0" align="center" color="#FFD080" width="0.3"></a-text>
     </a-entity>
 
-    <!-- ══════ ORBIT RINGS (thin white circles on the XZ plane) ══════ -->
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.145" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.210" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.285" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.365" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.490" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.630" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.765" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-    <a-torus position="0 0.001 0" rotation="90 0 0" radius="0.890" radius-tubular="0.0008" color="#fff" material="opacity:0.12; transparent:true"></a-torus>
-
-    <!-- ══════ MERCURY ══════ -->
-    <a-entity id="orb-mercury" class="orbit"
-      data-base-dur="4000"
-      animation="property:rotation; to:0 360 0; dur:4000; loop:true; easing:linear">
-      <a-sphere id="mercury" class="planet" radius="0.013"
-        position="0.145 0.12 0"
-        color="#B7B8B9"
-        material="roughness:0.9; metalness:0.1">
-      </a-sphere>
+    <!-- ══ ORBIT RINGS ══ -->
+    <a-entity id="orings">
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".145" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".210" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".285" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".365" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".490" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".630" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".765" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
+      <a-torus position="0 .001 0" rotation="90 0 0" radius=".890" radius-tubular=".0007" color="#fff" material="opacity:.1;transparent:true" class="oring"></a-torus>
     </a-entity>
 
-    <!-- ══════ VENUS ══════ -->
-    <a-entity id="orb-venus" class="orbit"
-      data-base-dur="7000"
-      animation="property:rotation; to:0 360 0; dur:7000; loop:true; easing:linear">
-      <a-sphere id="venus" class="planet" radius="0.022"
-        position="0.210 0.12 0"
-        color="#E8C37A"
-        material="roughness:0.6; emissive:#C08820; emissiveIntensity:0.05">
-      </a-sphere>
+    <!-- ══ MERCURY ══ -->
+    <a-entity id="orb-mercury" class="orbit" data-base-dur="4000" animation="property:rotation;to:0 360 0;dur:4000;loop:true;easing:linear">
+      <a-entity position=".145 .12 0">
+        <a-sphere id="mercury" class="planet" radius=".013" color="#B7B8B9" material="roughness:.9"></a-sphere>
+        <a-text value="Mercury" position="0 .03 0" align="center" color="#ccc" width=".22" class="plabel"></a-text>
+      </a-entity>
     </a-entity>
 
-    <!-- ══════ EARTH ══════ -->
-    <a-entity id="orb-earth" class="orbit"
-      data-base-dur="10000"
-      animation="property:rotation; to:0 360 0; dur:10000; loop:true; easing:linear">
-      <a-entity position="0.285 0.12 0">
-        <a-sphere id="earth" class="planet" radius="0.026"
-          color="#1A6FB0"
-          material="roughness:0.7; emissive:#082040; emissiveIntensity:0.08">
-        </a-sphere>
-        <!-- green landmass tint -->
-        <a-sphere radius="0.0265"
-          color="#2D7A3A"
-          material="opacity:0.35; transparent:true; roughness:1">
-        </a-sphere>
-        <!-- Moon orbit -->
-        <a-entity animation="property:rotation; to:0 360 0; dur:2700; loop:true; easing:linear">
-          <a-sphere radius="0.007" position="0.05 0 0" color="#CCCCCC"></a-sphere>
+    <!-- ══ VENUS ══ -->
+    <a-entity id="orb-venus" class="orbit" data-base-dur="7000" animation="property:rotation;to:0 360 0;dur:7000;loop:true;easing:linear">
+      <a-entity position=".210 .12 0">
+        <a-sphere id="venus" class="planet" radius=".022" color="#E8C37A"></a-sphere>
+        <a-text value="Venus" position="0 .04 0" align="center" color="#E8C37A" width=".22" class="plabel"></a-text>
+      </a-entity>
+    </a-entity>
+
+    <!-- ══ EARTH ══ -->
+    <a-entity id="orb-earth" class="orbit" data-base-dur="10000" animation="property:rotation;to:0 360 0;dur:10000;loop:true;easing:linear">
+      <a-entity position=".285 .12 0">
+        <a-sphere id="earth" class="planet" radius=".026" color="#1A6FB0" material="roughness:.7"></a-sphere>
+        <a-sphere radius=".0265" color="#2D7A3A" material="opacity:.35;transparent:true;roughness:1"></a-sphere>
+        <!-- Moon -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:2700;loop:true;easing:linear">
+          <a-sphere position=".05 0 0" radius=".007" color="#CCCCCC"></a-sphere>
         </a-entity>
+        <a-text value="Earth" position="0 .05 0" align="center" color="#4FC3F7" width=".22" class="plabel"></a-text>
       </a-entity>
     </a-entity>
 
-    <!-- ══════ MARS ══════ -->
-    <a-entity id="orb-mars" class="orbit"
-      data-base-dur="15000"
-      animation="property:rotation; to:0 360 0; dur:15000; loop:true; easing:linear">
-      <a-sphere id="mars" class="planet" radius="0.018"
-        position="0.365 0.12 0"
-        color="#C1440E"
-        material="roughness:0.9">
-      </a-sphere>
-    </a-entity>
-
-    <!-- ══════ JUPITER ══════ -->
-    <a-entity id="orb-jupiter" class="orbit"
-      data-base-dur="24000"
-      animation="property:rotation; to:0 360 0; dur:24000; loop:true; easing:linear">
-      <a-entity position="0.490 0.12 0">
-        <a-sphere id="jupiter" class="planet" radius="0.060"
-          color="#C88B3A"
-          material="roughness:0.85">
-        </a-sphere>
-        <!-- Great Red Spot band hint -->
-        <a-torus radius="0.038" radius-tubular="0.010"
-          rotation="0 0 90"
-          color="#8B3A1A"
-          material="opacity:0.45; transparent:true; side:double">
-        </a-torus>
+    <!-- ══ MARS ══ -->
+    <a-entity id="orb-mars" class="orbit" data-base-dur="15000" animation="property:rotation;to:0 360 0;dur:15000;loop:true;easing:linear">
+      <a-entity position=".365 .12 0">
+        <a-sphere id="mars" class="planet" radius=".018" color="#C1440E" material="roughness:.9"></a-sphere>
+        <a-text value="Mars" position="0 .036 0" align="center" color="#EF6C50" width=".22" class="plabel"></a-text>
       </a-entity>
     </a-entity>
 
-    <!-- ══════ SATURN + RINGS ══════ -->
-    <a-entity id="orb-saturn" class="orbit"
-      data-base-dur="36000"
-      animation="property:rotation; to:0 360 0; dur:36000; loop:true; easing:linear">
-      <a-entity position="0.630 0.12 0">
-        <a-sphere id="saturn" class="planet" radius="0.050"
-          color="#E4D191"
-          material="roughness:0.8">
-        </a-sphere>
-        <!-- Ring — outer -->
-        <a-torus radius="0.086" radius-tubular="0.022"
-          rotation="78 0 0"
-          color="#D4B86A"
-          material="opacity:0.70; transparent:true; side:double; roughness:1">
-        </a-torus>
-        <!-- Ring — inner darker -->
-        <a-torus radius="0.066" radius-tubular="0.010"
-          rotation="78 0 0"
-          color="#A08040"
-          material="opacity:0.50; transparent:true; side:double; roughness:1">
-        </a-torus>
+    <!-- ══ ASTEROID BELT (JS-generated) ══ -->
+    <a-entity id="belt"></a-entity>
+
+    <!-- ══ JUPITER + 4 GALILEAN MOONS ══ -->
+    <a-entity id="orb-jupiter" class="orbit" data-base-dur="24000" animation="property:rotation;to:0 360 0;dur:24000;loop:true;easing:linear">
+      <a-entity position=".490 .12 0">
+        <a-sphere id="jupiter" class="planet" radius=".060" color="#C88B3A" material="roughness:.85"></a-sphere>
+        <a-torus radius=".038" radius-tubular=".010" rotation="0 0 90" color="#8B3A1A" material="opacity:.4;transparent:true;side:double"></a-torus>
+        <!-- Io -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:1760;loop:true;easing:linear">
+          <a-sphere position=".09 0 0" radius=".006" color="#FFD700"></a-sphere>
+        </a-entity>
+        <!-- Europa -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:3520;loop:true;easing:linear">
+          <a-sphere position=".12 0 0" radius=".005" color="#E8E8D0"></a-sphere>
+        </a-entity>
+        <!-- Ganymede -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:8400;loop:true;easing:linear">
+          <a-sphere position=".16 0 0" radius=".009" color="#A89070"></a-sphere>
+        </a-entity>
+        <!-- Callisto -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:19600;loop:true;easing:linear">
+          <a-sphere position=".20 0 0" radius=".008" color="#4A4035"></a-sphere>
+        </a-entity>
+        <a-text value="Jupiter" position="0 .10 0" align="center" color="#C88B3A" width=".28" class="plabel"></a-text>
       </a-entity>
     </a-entity>
 
-    <!-- ══════ URANUS ══════ -->
-    <a-entity id="orb-uranus" class="orbit"
-      data-base-dur="50000"
-      animation="property:rotation; to:0 360 0; dur:50000; loop:true; easing:linear">
-      <a-sphere id="uranus" class="planet" radius="0.034"
-        position="0.765 0.12 0"
-        color="#7DE8E8"
-        material="roughness:0.5; emissive:#1A8080; emissiveIntensity:0.06">
-      </a-sphere>
+    <!-- ══ SATURN + RINGS + TITAN ══ -->
+    <a-entity id="orb-saturn" class="orbit" data-base-dur="36000" animation="property:rotation;to:0 360 0;dur:36000;loop:true;easing:linear">
+      <a-entity position=".630 .12 0">
+        <a-sphere id="saturn" class="planet" radius=".050" color="#E4D191"></a-sphere>
+        <a-torus radius=".086" radius-tubular=".022" rotation="78 0 0" color="#D4B86A" material="opacity:.72;transparent:true;side:double;roughness:1"></a-torus>
+        <a-torus radius=".066" radius-tubular=".010" rotation="78 0 0" color="#A08040" material="opacity:.50;transparent:true;side:double;roughness:1"></a-torus>
+        <!-- Titan -->
+        <a-entity animation="property:rotation;to:0 360 0;dur:5100;loop:true;easing:linear">
+          <a-sphere position=".15 0 0" radius=".010" color="#E8A020"></a-sphere>
+        </a-entity>
+        <a-text value="Saturn" position="0 .10 0" align="center" color="#E4D191" width=".28" class="plabel"></a-text>
+      </a-entity>
     </a-entity>
 
-    <!-- ══════ NEPTUNE ══════ -->
-    <a-entity id="orb-neptune" class="orbit"
-      data-base-dur="68000"
-      animation="property:rotation; to:0 360 0; dur:68000; loop:true; easing:linear">
-      <a-sphere id="neptune" class="planet" radius="0.031"
-        position="0.890 0.12 0"
-        color="#3F54BA"
-        material="roughness:0.5; emissive:#1A2555; emissiveIntensity:0.10">
-      </a-sphere>
+    <!-- ══ URANUS ══ -->
+    <a-entity id="orb-uranus" class="orbit" data-base-dur="50000" animation="property:rotation;to:0 360 0;dur:50000;loop:true;easing:linear">
+      <a-entity position=".765 .12 0">
+        <a-sphere id="uranus" class="planet" radius=".034" color="#7DE8E8"></a-sphere>
+        <a-torus radius=".050" radius-tubular=".003" rotation="0 0 90" color="#7DE8E8" material="opacity:.28;transparent:true;side:double"></a-torus>
+        <a-text value="Uranus" position="0 .06 0" align="center" color="#7DE8E8" width=".28" class="plabel"></a-text>
+      </a-entity>
+    </a-entity>
+
+    <!-- ══ NEPTUNE ══ -->
+    <a-entity id="orb-neptune" class="orbit" data-base-dur="68000" animation="property:rotation;to:0 360 0;dur:68000;loop:true;easing:linear">
+      <a-entity position=".890 .12 0">
+        <a-sphere id="neptune" class="planet" radius=".031" color="#3F54BA"></a-sphere>
+        <a-text value="Neptune" position="0 .06 0" align="center" color="#6080FF" width=".30" class="plabel"></a-text>
+      </a-entity>
     </a-entity>
 
   </a-marker>
 
-  <!-- Camera with raycaster for click detection -->
   <a-entity camera>
-    <a-entity
-      cursor="fuse: false"
-      raycaster="objects: .planet; recursive: false; far: 20"
-    ></a-entity>
+    <a-entity cursor="fuse:false" raycaster="objects:.planet;recursive:false;far:20"></a-entity>
   </a-entity>
 </a-scene>
 
-
-<!-- ════════════════════════════════════════
-     JAVASCRIPT
-     ════════════════════════════════════════ -->
 <script>
-// ── Planet data ──────────────────────────────────────────────────────────────
-const PLANETS = {
-  sun:     { name:'Sun',     type:'⭐ Star',                dist:'Center',       day:'25–36 Earth days', year:'N/A',            moons:'0',  fact:'Contains 99.86% of all mass in the solar system.' },
-  mercury: { name:'Mercury', type:'🪨 Terrestrial planet', dist:'57.9M km',     day:'59 Earth days',   year:'88 Earth days',  moons:'0',  fact:'Surface temperatures swing from −180°C to +430°C.' },
-  venus:   { name:'Venus',   type:'🪨 Terrestrial planet', dist:'108.2M km',    day:'243 Earth days',  year:'225 Earth days', moons:'0',  fact:'Hottest planet at 462°C — hotter than Mercury!' },
-  earth:   { name:'Earth',   type:'🪨 Terrestrial planet', dist:'149.6M km',    day:'24 hours',        year:'365.25 days',    moons:'1',  fact:'Only known planet with liquid water and life.' },
-  mars:    { name:'Mars',    type:'🪨 Terrestrial planet', dist:'227.9M km',    day:'24.6 hours',      year:'687 Earth days', moons:'2',  fact:'Home to Olympus Mons, the tallest volcano in the solar system (21 km).' },
-  jupiter: { name:'Jupiter', type:'🌀 Gas giant',          dist:'778.5M km',    day:'9.9 hours',       year:'12 Earth years', moons:'95', fact:'Great Red Spot is a storm that has raged for over 350 years.' },
-  saturn:  { name:'Saturn',  type:'🌀 Gas giant',          dist:'1.43B km',     day:'10.7 hours',      year:'29 Earth years', moons:'146',fact:'Its rings extend 282,000 km but are only ~1 km thick.' },
-  uranus:  { name:'Uranus',  type:'🧊 Ice giant',          dist:'2.87B km',     day:'17.2 hours',      year:'84 Earth years', moons:'28', fact:'Rotates on its side — axial tilt of 98°.' },
-  neptune: { name:'Neptune', type:'🧊 Ice giant',          dist:'4.5B km',      day:'16.1 hours',      year:'165 Earth years',moons:'16', fact:'Winds reach 2,100 km/h — fastest in the solar system.' },
+// ══════════════════════════════════════════════════════════
+// COMPREHENSIVE PLANET DATABASE
+// ══════════════════════════════════════════════════════════
+const DB = {
+  sun:{
+    name:'Sun', type:'G-type Main-Sequence Star', order:'Center of the Solar System',
+    stats:[
+      {l:'Diameter',v:'1,392,684 km',c:'109× Earth'},
+      {l:'Mass',v:'1.989 × 10³⁰ kg',c:'333,000× Earth'},
+      {l:'Core Temperature',v:'15,000,000 °C',c:'Nuclear fusion zone'},
+      {l:'Surface Temp',v:'5,500 °C',c:'Photosphere'},
+      {l:'Rotation Period',v:'25–36 Earth days',c:'Differential rotation'},
+      {l:'Age',v:'4.603 Billion years',c:'Middle-aged star'},
+      {l:'Spectral Class',v:'G2V',c:'Yellow Dwarf'},
+      {l:'Luminosity',v:'3.828 × 10²⁶ W',c:'Energy output per second'},
+    ],
+    gravity:28.0, gnote:'28× Earth — escape velocity 617.7 km/s',
+    onote:'The Sun is a nearly perfect plasma sphere held together by its own gravity. At its core, nuclear fusion converts 600 million tonnes of hydrogen to helium every second, releasing the energy that powers all life on Earth.',
+    atm:[
+      {g:'Hydrogen (H)',p:73.5,c:'#FF8C00'},
+      {g:'Helium (He)',p:24.9,c:'#FFD700'},
+      {g:'Oxygen, Carbon, others',p:1.6,c:'#88AAFF'},
+    ],
+    afact:'The Sun\'s outer atmosphere (corona) is paradoxically hotter than its surface — reaching 1–3 million °C vs 5,500 °C at the photosphere. This is an unsolved mystery in solar physics.',
+    moons:[], mfooter:'No moons, but 8 planets, 5 dwarf planets, and millions of asteroids orbit the Sun.',
+    missions:[
+      {y:'1990',n:'Ulysses (NASA/ESA)',d:'Studied the solar wind and magnetic field above the poles — confirmed the Sun\'s polar structure.'},
+      {y:'1995',n:'SOHO',d:'Solar & Heliospheric Observatory — still operational after 28 years, studying solar activity continuously.'},
+      {y:'2006',n:'STEREO',d:'Two spacecraft giving the first 3D view of the Sun and Coronal Mass Ejections.'},
+      {y:'2018',n:'Parker Solar Probe (NASA)',d:'The closest spacecraft to the Sun ever — flew through the corona at 8.86 solar radii, survived 1,377°C.'},
+      {y:'2020',n:'Solar Orbiter (ESA)',d:'First images of the solar north pole — discovered "campfires" (tiny solar flares) covering the surface.'},
+    ],
+    facts:[
+      'The Sun contains 99.86% of all the mass in the entire solar system. All planets, moons, asteroids and comets make up only 0.14%.',
+      'Light from the Sun\'s core takes 100,000 years to reach the surface — but only 8 minutes 20 seconds to travel from the surface to Earth.',
+      'The Sun\'s magnetic field reverses direction every 11 years in the solar cycle, driving sunspot activity and solar flares.',
+      'The Sun will eventually exhaust its hydrogen fuel in about 5 billion years, expand into a Red Giant engulfing Mercury, Venus and possibly Earth.',
+      'Every second the Sun converts 4 million tonnes of matter directly into energy via E=mc². This is the source of all solar energy, light and heat.',
+    ],
+  },
+  mercury:{
+    name:'Mercury', type:'Terrestrial Planet', order:'1st planet — closest to the Sun',
+    stats:[
+      {l:'Diameter',v:'4,879 km',c:'38.3% of Earth'},
+      {l:'Mass',v:'3.301 × 10²³ kg',c:'5.5% of Earth'},
+      {l:'Distance from Sun',v:'57.9 million km',c:'0.387 AU'},
+      {l:'Day Length',v:'58.6 Earth days',c:'Slowest rotation'},
+      {l:'Year Length',v:'87.97 Earth days',c:'Fastest orbit: 47.4 km/s'},
+      {l:'Surface Temp Range',v:'−180°C to +430°C',c:'Widest range in solar system'},
+      {l:'Core Composition',v:'Iron-Nickel',c:'85% of planet radius'},
+      {l:'Orbital Eccentricity',v:'0.206',c:'Most elliptical orbit'},
+    ],
+    gravity:0.38, gnote:'0.38g — you\'d weigh 62% less than on Earth',
+    onote:'Mercury has a disproportionately large iron core making up 85% of its radius, likely the result of a giant impact that stripped its outer mantle billions of years ago. This gives it the second-highest density of any planet.',
+    atm:[
+      {g:'Oxygen (O)',p:42,c:'#88AAFF'},
+      {g:'Sodium (Na)',p:29,c:'#FFAA44'},
+      {g:'Hydrogen (H)',p:22,c:'#FF8C00'},
+      {g:'Helium (He)',p:6,c:'#FFD700'},
+      {g:'Potassium (K)',p:1,c:'#AAAAFF'},
+    ],
+    afact:'Mercury\'s "atmosphere" is actually an exosphere — so thin that atoms rarely collide. It is constantly being replenished as solar wind strips atoms from the surface and space rocks impact it.',
+    moons:[], mfooter:'Mercury has no moons. Its weak gravity and proximity to the Sun makes stable moon orbits impossible.',
+    missions:[
+      {y:'1974',n:'Mariner 10 (NASA)',d:'First spacecraft to fly past Mercury — mapped 45% of the surface during three flybys, discovered the magnetic field.'},
+      {y:'2011',n:'MESSENGER (NASA)',d:'First spacecraft to orbit Mercury — mapped 100% of the surface. Confirmed water ice in permanently shadowed polar craters.'},
+      {y:'2025',n:'BepiColombo (ESA/JAXA)',d:'Joint European-Japanese mission currently en route — will enter Mercury orbit in 2025 with two orbiters for detailed study.'},
+    ],
+    facts:[
+      'Despite being the closest planet to the Sun, Mercury is NOT the hottest — Venus is hotter due to its thick CO₂ greenhouse atmosphere.',
+      'A day on Mercury (sunrise to sunrise) lasts 176 Earth days — longer than its year of 88 days. This is because of its unique 3:2 spin-orbit resonance.',
+      'Mercury has water ice in permanently shadowed craters at its poles even though daytime temperatures reach 430°C. The MESSENGER spacecraft confirmed this in 2012.',
+      'Mercury\'s iron core is thought to be partially molten, generating a weak magnetic field — the only rocky planet besides Earth with a global magnetic field.',
+      'Because Mercury has almost no atmosphere, the sky is always black even during the day. The Sun would appear 2.5× larger from Mercury\'s surface than from Earth.',
+    ],
+  },
+  venus:{
+    name:'Venus', type:'Terrestrial Planet', order:'2nd planet from the Sun',
+    stats:[
+      {l:'Diameter',v:'12,104 km',c:'94.9% of Earth'},
+      {l:'Mass',v:'4.867 × 10²⁴ kg',c:'81.5% of Earth'},
+      {l:'Distance from Sun',v:'108.2 million km',c:'0.723 AU'},
+      {l:'Day Length',v:'243 Earth days',c:'Longer than its year!'},
+      {l:'Year Length',v:'224.7 Earth days',c:'Shorter than its day'},
+      {l:'Surface Temperature',v:'464°C',c:'Hottest planet'},
+      {l:'Surface Pressure',v:'92 atm',c:'= 900m underwater on Earth'},
+      {l:'Axial Tilt',v:'177.4°',c:'Retrograde — spins backwards'},
+    ],
+    gravity:0.91, gnote:'0.91g — closest to Earth\'s gravity of all planets',
+    onote:'Venus is often called Earth\'s twin due to its similar size and mass, but its runaway greenhouse effect makes it the most hostile planet in the solar system. Surface temperatures are hot enough to melt lead at 464°C.',
+    atm:[
+      {g:'Carbon Dioxide (CO₂)',p:96.5,c:'#FF6B35'},
+      {g:'Nitrogen (N₂)',p:3.5,c:'#88AAFF'},
+      {g:'Sulfur Dioxide (SO₂)',p:0.015,c:'#FFFF44'},
+    ],
+    afact:'Venus has a thick atmosphere that creates a catastrophic greenhouse effect. The CO₂ traps heat so effectively that night and day temperatures are virtually identical at 464°C — even the poles are just as hot as the equator.',
+    moons:[], mfooter:'Venus has no moons. Scientists theorize it may have had a moon billions of years ago that was destroyed after a large impact reversed Venus\'s rotation.',
+    missions:[
+      {y:'1970',n:'Venera 7 (USSR)',d:'First spacecraft to successfully land on another planet and transmit data — survived 23 minutes on the surface.'},
+      {y:'1975',n:'Venera 9 (USSR)',d:'Sent the first photographs from the surface of Venus — showing sharp angular rocks, not rounded like expected.'},
+      {y:'1989',n:'Magellan (NASA)',d:'Used radar to map 98% of Venus\'s surface through the opaque clouds — revealed thousands of volcanoes.'},
+      {y:'2006',n:'Venus Express (ESA)',d:'Orbited Venus for 8 years studying its thick atmosphere, winds, and potential volcanic activity.'},
+      {y:'2031',n:'VERITAS + EnVision',d:'Future NASA/ESA missions approved to map Venus geology — may determine if Venus is geologically active today.'},
+    ],
+    facts:[
+      'Venus rotates backwards (retrograde rotation) compared to most planets. If you stood on Venus, the Sun would rise in the west and set in the east.',
+      'A day on Venus (243 Earth days) is longer than a year on Venus (224.7 Earth days) — the only planet where this is true.',
+      'Venus is the brightest natural object in Earth\'s sky after the Moon — so bright it can cast shadows on Earth at night.',
+      'The surface of Venus is hot enough to melt lead (melting point 327°C) due to the extreme greenhouse effect, even though Venus receives only 1.9× Earth\'s sunlight.',
+      'Venus has over 1,600 major volcanoes — more than any other planet. Recent analysis of Magellan data suggests at least one may be currently active.',
+    ],
+  },
+  earth:{
+    name:'Earth', type:'Terrestrial Planet', order:'3rd planet — the only inhabited world',
+    stats:[
+      {l:'Diameter',v:'12,742 km',c:'Baseline — 1× Earth'},
+      {l:'Mass',v:'5.972 × 10²⁴ kg',c:'Baseline — 1 Earth mass'},
+      {l:'Distance from Sun',v:'149.6 million km',c:'1 AU (definition)'},
+      {l:'Day Length',v:'23h 56m 4.1s',c:'Sidereal day'},
+      {l:'Year Length',v:'365.25 days',c:'Baseline orbital period'},
+      {l:'Surface Temperature',v:'15°C (average)',c:'Range: −88°C to 58°C'},
+      {l:'Ocean Coverage',v:'71% of surface',c:'1.335 billion km³ of water'},
+      {l:'Axial Tilt',v:'23.44°',c:'Creates four seasons'},
+    ],
+    gravity:1.00, gnote:'1.00g — the baseline all other planets are measured against',
+    onote:'Earth is the only planet known to harbour life, largely due to its position in the habitable zone, presence of liquid water, protective magnetic field, and stable 23.5° axial tilt — maintained by the Moon\'s gravitational influence.',
+    atm:[
+      {g:'Nitrogen (N₂)',p:78.09,c:'#4488FF'},
+      {g:'Oxygen (O₂)',p:20.95,c:'#44CCFF'},
+      {g:'Argon (Ar)',p:0.93,c:'#AAAAFF'},
+      {g:'Carbon Dioxide (CO₂)',p:0.04,c:'#FF6B35'},
+    ],
+    afact:'Earth\'s atmosphere maintains surface temperatures 33°C warmer than they would otherwise be through the greenhouse effect. Without this natural warming, Earth\'s average temperature would be −18°C and liquid water could not exist.',
+    moons:[
+      {n:'Moon (Luna)',d:'384,400 km',p:'27.32 days',f:'1.737 km radius'},
+    ],
+    mfooter:'Earth has 1 natural satellite. The Moon is the 5th largest moon in the solar system, and the largest relative to its host planet. It stabilises Earth\'s axial tilt and drives ocean tides.',
+    missions:[
+      {y:'1957',n:'Sputnik 1 (USSR)',d:'First artificial satellite — launched October 4th, started the Space Age and the space race.'},
+      {y:'1969',n:'Apollo 11 (NASA)',d:'First humans on the Moon — Neil Armstrong and Buzz Aldrin landed July 20th. Six missions landed, collecting 382 kg of lunar rock.'},
+      {y:'1990',n:'Hubble Space Telescope',d:'Revolutionised astronomy — discovered dark energy, refined the age of the universe to 13.8 billion years.'},
+      {y:'1998',n:'International Space Station',d:'16-nation collaboration — continuously inhabited since November 2000, hosted 273 people from 20 countries.'},
+      {y:'2021',n:'James Webb Space Telescope',d:'Most powerful telescope ever built — can see galaxies from 13.6 billion years ago and analyse exoplanet atmospheres.'},
+    ],
+    facts:[
+      'Earth is the only planet not named after a Greek or Roman god. "Earth" derives from Old English and Germanic words meaning "the ground."',
+      'Earth\'s magnetic field, generated by its liquid iron-nickel outer core, shields the surface from deadly solar wind. Without it, solar radiation would strip away the atmosphere.',
+      'The movement of Earth\'s tectonic plates recycles the crust every ~200 million years, regulating CO₂ levels and maintaining a habitable climate over geological time. No other known planet does this.',
+      'Earth\'s Moon is gradually drifting away at 3.8 cm per year. Four billion years ago the Moon was 16× closer, making days only 6 hours long and tides 1,000× stronger.',
+      'Earth has experienced at least 5 mass extinction events. The most recent (65.5 million years ago) wiped out non-avian dinosaurs when an asteroid 10–15 km wide struck the Yucatán Peninsula.',
+    ],
+  },
+  mars:{
+    name:'Mars', type:'Terrestrial Planet', order:'4th planet from the Sun',
+    stats:[
+      {l:'Diameter',v:'6,779 km',c:'53.2% of Earth'},
+      {l:'Mass',v:'6.39 × 10²³ kg',c:'10.7% of Earth'},
+      {l:'Distance from Sun',v:'227.9 million km',c:'1.524 AU'},
+      {l:'Day Length',v:'24h 37m 22s',c:'A "sol" — close to Earth'},
+      {l:'Year Length',v:'686.97 Earth days',c:'1.88 Earth years'},
+      {l:'Surface Temperature',v:'−65°C (average)',c:'Range: −140°C to 20°C'},
+      {l:'Olympus Mons Height',v:'21.9 km',c:'2.6× Mount Everest'},
+      {l:'Axial Tilt',v:'25.19°',c:'Similar to Earth (23.5°)'},
+    ],
+    gravity:0.38, gnote:'0.38g — same as Mercury. 80 kg person weighs only 30 kg',
+    onote:'Mars is the most studied planet after Earth, with 50+ missions launched to it. Evidence shows Mars had rivers, lakes, and possibly an ocean 3.5 billion years ago. The question of ancient (or present microbial) life remains open.',
+    atm:[
+      {g:'Carbon Dioxide (CO₂)',p:95.3,c:'#FF6B35'},
+      {g:'Nitrogen (N₂)',p:2.7,c:'#88AAFF'},
+      {g:'Argon (Ar)',p:1.6,c:'#AAAAFF'},
+      {g:'Oxygen (O₂)',p:0.15,c:'#44CCFF'},
+      {g:'Carbon Monoxide',p:0.06,c:'#888'},
+    ],
+    afact:'Mars\' thin atmosphere (1% of Earth\'s density) cannot retain heat, causing extreme temperature swings. Dust storms can grow to engulf the entire planet for months, blocking sunlight and dropping temperatures by 30°C.',
+    moons:[
+      {n:'Phobos',d:'9,376 km',p:'7.66 hours',f:'Spiralling inward — will crash in 50M yrs'},
+      {n:'Deimos',d:'23,463 km',p:'30.31 hours',f:'Slowly drifting away'},
+    ],
+    mfooter:'Mars has 2 small, irregularly shaped moons likely captured asteroids. Phobos orbits faster than Mars rotates — it rises in the west and sets in the east, completing 3 orbits per Martian day.',
+    missions:[
+      {y:'1976',n:'Viking 1 & 2 (NASA)',d:'First successful Mars landers — conducted biology experiments searching for life. Results still debated today.'},
+      {y:'2004',n:'Spirit & Opportunity (NASA)',d:'Planned for 90 days — Opportunity operated for 14 years and drove 45.16 km, discovering water-formed minerals.'},
+      {y:'2012',n:'Curiosity (NASA)',d:'Still operational — confirmed Gale Crater was a habitable lake environment 3.5 billion years ago.'},
+      {y:'2021',n:'Perseverance + Ingenuity',d:'Perseverance collecting rock samples for future return to Earth. Ingenuity made the first powered flight on another planet.'},
+      {y:'2021',n:'Tianwen-1 + Zhurong (CNSA)',d:'China\'s first Mars mission — successfully landed Zhurong rover, making China the 2nd country to operate a Mars rover.'},
+    ],
+    facts:[
+      'Olympus Mons on Mars is the largest volcano in the entire solar system at 21.9 km tall and 600 km across — so wide its base would cover France.',
+      'Valles Marineris is a canyon system 4,000 km long, 200 km wide and 7 km deep — if on Earth it would stretch from Portugal to Iran.',
+      'The Curiosity rover confirmed in 2013 that Mars once had all the chemical ingredients necessary for microbial life, including carbon, hydrogen, oxygen, nitrogen, sulfur and phosphorus.',
+      'A Martian sunset is blue due to fine dust particles scattering red light, while the daytime sky is a butterscotch-pink colour — the exact opposite of Earth.',
+      'Mars has the same land area as Earth despite being half its size, because Earth\'s surface is 71% ocean. Both planets have roughly the same amount of dry land.',
+    ],
+  },
+  jupiter:{
+    name:'Jupiter', type:'Gas Giant', order:'5th planet — largest in the solar system',
+    stats:[
+      {l:'Diameter',v:'139,820 km',c:'11.2× Earth diameter'},
+      {l:'Mass',v:'1.898 × 10²⁷ kg',c:'317.8× Earth mass'},
+      {l:'Distance from Sun',v:'778.5 million km',c:'5.203 AU'},
+      {l:'Day Length',v:'9h 55m 30s',c:'Fastest rotation of all planets'},
+      {l:'Year Length',v:'11.86 Earth years',c:'4,332 Earth days'},
+      {l:'Cloud-top Temp',v:'−108°C',c:'Core: ~24,000°C'},
+      {l:'Magnetic Field',v:'20,000× Earth\'s',c:'Strongest planetary field'},
+      {l:'Known Moons',v:'95 confirmed',c:'Most in solar system'},
+    ],
+    gravity:2.53, gnote:'2.53g — you\'d weigh 2.5× more. 70 kg becomes 177 kg',
+    onote:'Jupiter is a failed star — if it had been about 80× more massive, nuclear fusion would have ignited in its core. It radiates more heat than it receives from the Sun, generating energy through slow gravitational compression (Kelvin-Helmholtz mechanism).',
+    atm:[
+      {g:'Hydrogen (H₂)',p:89.8,c:'#FF8C00'},
+      {g:'Helium (He)',p:10.2,c:'#FFD700'},
+      {g:'Methane (CH₄)',p:0.3,c:'#88FFAA'},
+      {g:'Ammonia (NH₃)',p:0.026,c:'#FFAAFF'},
+    ],
+    afact:'Jupiter has no solid surface. Descending through its atmosphere, hydrogen gas gradually becomes denser until at extreme depths it transitions into metallic hydrogen — a state where hydrogen conducts electricity like a metal, generating Jupiter\'s enormous magnetic field.',
+    moons:[
+      {n:'Io',d:'421,800 km',p:'1.769 days',f:'Most volcanically active body in solar system'},
+      {n:'Europa',d:'671,100 km',p:'3.551 days',f:'Subsurface ocean — prime life candidate'},
+      {n:'Ganymede',d:'1,070,400 km',p:'7.155 days',f:'Largest moon in solar system (bigger than Mercury)'},
+      {n:'Callisto',d:'1,882,700 km',p:'16.69 days',f:'Most heavily cratered body in solar system'},
+    ],
+    mfooter:'Jupiter has 95 confirmed moons. The 4 Galilean moons (shown in AR) were discovered by Galileo in 1610 — the first moons discovered orbiting another planet, proving Earth is not the center of the universe.',
+    missions:[
+      {y:'1973',n:'Pioneer 10 (NASA)',d:'First spacecraft to fly past Jupiter — sent first close-up images and survived the intense radiation belts.'},
+      {y:'1979',n:'Voyager 1 & 2 (NASA)',d:'Discovered Jupiter\'s ring system, active volcanoes on Io, and possible ocean on Europa.'},
+      {y:'1995',n:'Galileo (NASA)',d:'Orbited Jupiter for 8 years — dropped a probe into the atmosphere, studied all Galilean moons. Crashed into Jupiter 2003.'},
+      {y:'2016',n:'Juno (NASA)',d:'Currently in polar orbit — mapping Jupiter\'s gravity, magnetic field and atmospheric dynamics to unprecedented depth.'},
+      {y:'2030',n:'Europa Clipper (NASA)',d:'Approved mission launching 2024 — will make 49 close flybys of Europa to assess its ocean for habitability.'},
+    ],
+    facts:[
+      'All other planets in the solar system could fit inside Jupiter with room to spare — Jupiter\'s volume is 1,321× that of Earth.',
+      'The Great Red Spot is an anticyclonic storm larger than Earth that has persisted for at least 350 years, though it has been slowly shrinking since the 19th century.',
+      'Jupiter\'s moon Europa has a liquid water ocean beneath its icy crust containing twice as much water as all of Earth\'s oceans — making it one of the most promising places to search for extraterrestrial life.',
+      'Jupiter acts as a gravitational shield — its massive gravity deflects many comets and asteroids away from the inner solar system. A 1994 comet (Shoemaker-Levy 9) famously crashed into Jupiter instead of Earth.',
+      'Jupiter\'s moon Ganymede is the largest moon in the solar system at 5,268 km diameter — larger than the planet Mercury and has its own magnetic field and possibly an underground saltwater ocean.',
+    ],
+  },
+  saturn:{
+    name:'Saturn', type:'Gas Giant', order:'6th planet from the Sun',
+    stats:[
+      {l:'Diameter',v:'116,460 km',c:'9.45× Earth'},
+      {l:'Mass',v:'5.683 × 10²⁶ kg',c:'95.16× Earth'},
+      {l:'Distance from Sun',v:'1.432 billion km',c:'9.537 AU'},
+      {l:'Day Length',v:'10h 33m',c:'2nd fastest rotation'},
+      {l:'Year Length',v:'29.46 Earth years',c:'10,759 Earth days'},
+      {l:'Ring Span',v:'282,000 km outer edge',c:'Only ~20m–1km thick'},
+      {l:'Density',v:'0.687 g/cm³',c:'Less dense than water!'},
+      {l:'Known Moons',v:'146 confirmed',c:'Most of any planet'},
+    ],
+    gravity:1.07, gnote:'1.07g — almost identical to standing on Earth',
+    onote:'Saturn\'s low density means it would float in water if a large enough ocean existed. Its spectacular ring system consists of billions of pieces of ice and rock, the remains of comets, asteroids, and moons shattered by Saturn\'s tidal forces.',
+    atm:[
+      {g:'Hydrogen (H₂)',p:96.3,c:'#FF8C00'},
+      {g:'Helium (He)',p:3.25,c:'#FFD700'},
+      {g:'Methane (CH₄)',p:0.45,c:'#88FFAA'},
+    ],
+    afact:'Saturn radiates 2.5× more energy than it receives from the Sun. Unlike Jupiter, this excess energy is partly generated by helium droplets condensing and falling like rain through Saturn\'s hydrogen interior, releasing gravitational potential energy as heat.',
+    moons:[
+      {n:'Titan',d:'1,221,870 km',p:'15.95 days',f:'Only moon with dense atmosphere; methane lakes'},
+      {n:'Enceladus',d:'238,020 km',p:'1.370 days',f:'Active geysers of water ice — subsurface ocean'},
+      {n:'Rhea',d:'527,108 km',p:'4.518 days',f:'Possible faint ring system around it'},
+      {n:'Dione',d:'377,396 km',p:'2.737 days',f:'Ice cliffs up to 500m tall on surface'},
+      {n:'Mimas',d:'185,539 km',p:'0.942 days',f:'Large crater makes it look like the Death Star'},
+    ],
+    mfooter:'Saturn has 146 confirmed moons — more than any other planet. Many were only discovered recently using advanced ground telescopes. Titan is shown orbiting in the AR view.',
+    missions:[
+      {y:'1979',n:'Pioneer 11 (NASA)',d:'First spacecraft to fly past Saturn — discovered a new ring (F ring) and measured the temperature of Titan.'},
+      {y:'1980',n:'Voyager 1 (NASA)',d:'Detailed images of the ring system — discovered its complex structure, gaps, and shepherd moons.'},
+      {y:'2004',n:'Cassini-Huygens (NASA/ESA)',d:'Orbited Saturn for 13 years — the most successful outer planet mission. Discovered oceans on Enceladus and Titan.'},
+      {y:'2005',n:'Huygens Probe (ESA)',d:'Landed on Titan — revealed rivers, lakes and rain of liquid methane, making it the most Earth-like world after Earth itself.'},
+      {y:'2017',n:'Cassini Grand Finale',d:'Cassini made 22 dives between Saturn and its rings before intentionally burning up — to prevent contaminating Enceladus.'},
+    ],
+    facts:[
+      'Saturn\'s rings extend 282,000 km from the planet — nearly the distance from Earth to the Moon — yet they are only 20 metres to 1 kilometre thick. They would be proportionally thinner than a sheet of paper.',
+      'Saturn\'s moon Titan is the only moon in the solar system with a thick nitrogen atmosphere, and the only world other than Earth known to have liquid on its surface — lakes and rivers of liquid methane and ethane.',
+      'Saturn\'s moon Enceladus has geysers that shoot water vapour and ice particles 800 km into space at 1,400 km/h, directly feeding Saturn\'s E ring. The Cassini spacecraft detected complex organic molecules in these geysers.',
+      'Saturn has a permanent hexagonal storm at its north pole, 30,000 km across (larger than 2.5 Earths), with 320 km/h winds. It has persisted for at least 40 years and no one fully understands why it\'s hexagonal.',
+      'Saturn\'s density of 0.69 g/cm³ is less than water (1.0 g/cm³). If you could find an ocean large enough, Saturn would float — the only planet in our solar system that would do so.',
+    ],
+  },
+  uranus:{
+    name:'Uranus', type:'Ice Giant', order:'7th planet from the Sun',
+    stats:[
+      {l:'Diameter',v:'50,724 km',c:'4.007× Earth'},
+      {l:'Mass',v:'8.681 × 10²⁵ kg',c:'14.54× Earth'},
+      {l:'Distance from Sun',v:'2.871 billion km',c:'19.19 AU'},
+      {l:'Day Length',v:'17h 14m',c:'Retrograde rotation'},
+      {l:'Year Length',v:'84.01 Earth years',c:'30,589 Earth days'},
+      {l:'Min Temperature',v:'−224°C',c:'Coldest planetary atmosphere'},
+      {l:'Axial Tilt',v:'97.77°',c:'Rotates on its side'},
+      {l:'Ring System',v:'13 known rings',c:'Discovered 1977'},
+    ],
+    gravity:0.89, gnote:'0.89g — slightly lower than Earth\'s surface gravity',
+    onote:'Uranus is the only giant planet whose equator is nearly at right angles to its orbit — it essentially rolls around the Sun on its side. This extreme tilt likely resulted from a collision with an Earth-sized object during the formation of the solar system.',
+    atm:[
+      {g:'Hydrogen (H₂)',p:83,c:'#FF8C00'},
+      {g:'Helium (He)',p:15,c:'#FFD700'},
+      {g:'Methane (CH₄)',p:2.3,c:'#7DE8E8'},
+    ],
+    afact:'Unlike Jupiter and Saturn, Uranus emits almost no excess heat — it radiates only as much energy as it receives from the Sun, meaning its internal heat source is essentially zero. Why Uranus is so cold internally is one of the major unsolved problems in planetary science.',
+    moons:[
+      {n:'Titania',d:'435,910 km',p:'8.706 days',f:'Largest Uranian moon — canyons up to 1,600 km long'},
+      {n:'Oberon',d:'583,520 km',p:'13.46 days',f:'Heavily cratered — oldest surface on Uranian moons'},
+      {n:'Umbriel',d:'266,000 km',p:'4.144 days',f:'Darkest moon — surface covered in dark material'},
+      {n:'Ariel',d:'191,020 km',p:'2.520 days',f:'Youngest, brightest surface — active geology'},
+      {n:'Miranda',d:'129,390 km',p:'1.413 days',f:'Extreme terrain — Verona Rupes cliff 10 km tall'},
+    ],
+    mfooter:'Uranus has 28 known moons — all named after characters from Shakespeare\'s plays and Alexander Pope\'s "The Rape of the Lock." This unique naming convention was set by William Herschel\'s son John.',
+    missions:[
+      {y:'1986',n:'Voyager 2 (NASA)',d:'The only spacecraft to visit Uranus — a brief flyby in January 1986. Discovered 10 new moons and 2 new rings during the 5.5-hour encounter.'},
+      {y:'2030s',n:'Uranus Orbiter & Probe',d:'Named NASA\'s highest-priority flagship mission for the 2023–2032 decade. Would be the first dedicated Uranus orbiter, studying its interior, magnetic field and moons.'},
+    ],
+    facts:[
+      'Uranus rotates on its side with a 97.77° axial tilt — its poles spend 42 years in continuous sunlight, followed by 42 years in complete darkness, as it makes its 84-year orbit.',
+      'Uranus was the first planet discovered with a telescope, found by William Herschel on March 13, 1781. He initially thought it was a comet — the first new planet discovered since antiquity.',
+      'Uranus is the coldest planetary atmosphere in the solar system at −224°C, despite being 20 AU from the Sun. Even Neptune, which is farther away, has a higher internal temperature.',
+      'Uranus has 13 dark, narrow rings discovered in 1977 when they blocked the light of a background star. The rings were so dark that they were invisible to Earth-based telescopes before this accidental discovery.',
+      'Inside Uranus, water, ammonia, and methane are compressed into a hot, dense fluid sometimes called a "water-ammonia ocean." Under the extreme pressure, this layer may contain ionic water that conducts electricity.',
+    ],
+  },
+  neptune:{
+    name:'Neptune', type:'Ice Giant', order:'8th planet — farthest from the Sun',
+    stats:[
+      {l:'Diameter',v:'49,244 km',c:'3.865× Earth'},
+      {l:'Mass',v:'1.024 × 10²⁶ kg',c:'17.15× Earth'},
+      {l:'Distance from Sun',v:'4.495 billion km',c:'30.07 AU'},
+      {l:'Day Length',v:'16h 6m 36s',c:'Faster than Earth'},
+      {l:'Year Length',v:'164.8 Earth years',c:'Completed 1st orbit 2011'},
+      {l:'Wind Speed',v:'2,100 km/h max',c:'Fastest winds in solar system'},
+      {l:'Surface Temp',v:'−201°C',c:'2nd coldest planet'},
+      {l:'Distance from Earth',v:'4.3–4.7 billion km',c:'Light takes 4+ hours'},
+    ],
+    gravity:1.14, gnote:'1.14g — 14% heavier than standing on Earth',
+    onote:'Neptune was the first planet predicted mathematically before being observed. Astronomers noticed Uranus deviated from its predicted orbit, leading Urbain Le Verrier to calculate where an unknown planet must be. Johann Galle found Neptune within 1° of the predicted position on September 23, 1846.',
+    atm:[
+      {g:'Hydrogen (H₂)',p:80,c:'#FF8C00'},
+      {g:'Helium (He)',p:19,c:'#FFD700'},
+      {g:'Methane (CH₄)',p:1.5,c:'#3F54BA'},
+    ],
+    afact:'Neptune\'s winds reach 2,100 km/h — the fastest of any planet, despite receiving only 1/900th of Earth\'s sunlight. This energy mystery suggests Neptune has a powerful internal heat source, radiating 2.6× more heat than it receives from the Sun.',
+    moons:[
+      {n:'Triton',d:'354,760 km',p:'5.877 days',f:'Retrograde orbit — will crash into Neptune in ~3.6 billion years'},
+      {n:'Proteus',d:'117,647 km',p:'1.122 days',f:'Irregular shape — just below size needed to become spherical'},
+      {n:'Nereid',d:'5,513,400 km',p:'360.1 days',f:'Highest orbital eccentricity of any known moon (0.75)'},
+      {n:'Larissa',d:'73,548 km',p:'0.555 days',f:'Irregular shape, heavily cratered surface'},
+    ],
+    mfooter:'Neptune has 16 known moons. Triton is by far the largest and most remarkable — it orbits backwards (retrograde), suggesting it is a captured Kuiper Belt object, not a moon that formed with Neptune.',
+    missions:[
+      {y:'1989',n:'Voyager 2 (NASA)',d:'The only spacecraft to visit Neptune — flyby on August 25, 1989. Discovered 6 new moons, 4 rings, and active geysers on Triton shooting nitrogen 8 km high.'},
+      {y:'2040s',n:'Neptune Orbiter (Proposed)',d:'No approved mission to date. Scientists advocate for a dedicated Neptune orbiter to study its unusual magnetic field and Triton\'s potential subsurface ocean.'},
+    ],
+    facts:[
+      'Neptune was discovered mathematically — predicted by Urbain Le Verrier in 1846 from irregularities in Uranus\'s orbit. It was found within 1° of the predicted position, one of the greatest triumphs of Newtonian mechanics.',
+      'Neptune completed its very first full orbit since its discovery in July 2011 — exactly 164.8 years after it was first observed in September 1846.',
+      'Neptune\'s moon Triton orbits in the opposite direction to Neptune\'s rotation. This retrograde orbit proves it was captured from the Kuiper Belt rather than forming with Neptune. Tidal forces are slowly pulling it inward — it will be torn apart in ~3.6 billion years.',
+      'Scientists predict diamond rain may fall inside Neptune. Carbon under extreme pressure (6 million times atmospheric) and temperatures of 7,000°C forms diamond crystals that then sink toward the core.',
+      'Neptune\'s Great Dark Spot (a storm as large as Earth) was discovered by Voyager 2 in 1989 but had vanished when Hubble observed Neptune in 1994 — unlike Jupiter\'s Red Spot which has lasted centuries. New dark spots have since appeared and disappeared.',
+    ],
+  },
 };
 
-// ── Show/hide planet info card ────────────────────────────────────────────────
-function showCard(id) {
-  const d = PLANETS[id];
-  if (!d) return;
-  document.getElementById('pc-name').textContent  = d.name;
-  document.getElementById('pc-type').textContent  = d.type;
-  document.getElementById('pc-dist').textContent  = d.dist;
-  document.getElementById('pc-day').textContent   = d.day;
-  document.getElementById('pc-year').textContent  = d.year;
-  document.getElementById('pc-moons').textContent = d.moons;
-  document.getElementById('pc-fact').textContent  = d.fact;
-  document.getElementById('planet-card').style.display = 'block';
-}
-function closeCard() {
-  document.getElementById('planet-card').style.display = 'none';
-}
-
-// ── Attach click listeners to planets ────────────────────────────────────────
-document.querySelectorAll('.planet').forEach(el => {
-  el.addEventListener('click', () => showCard(el.id));
+// ═══════════════════════════════
+// GENERATE ASTEROID BELT
+// ═══════════════════════════════
+window.addEventListener('load',()=>{
+  const belt=document.getElementById('belt');
+  const cols=['#888','#777','#999','#aaa','#666','#8a8a7a','#9a9080'];
+  for(let i=0;i<40;i++){
+    const ang=(i/40)*Math.PI*2+(Math.random()-.5)*.4;
+    const r=.425+(Math.random()-.5)*.05;
+    const x=+(Math.cos(ang)*r).toFixed(4);
+    const z=+(Math.sin(ang)*r).toFixed(4);
+    const y=+(.12+(Math.random()-.5)*.018).toFixed(4);
+    const s=+(.003+Math.random()*.007).toFixed(4);
+    const a=document.createElement('a-sphere');
+    a.setAttribute('position',`${x} ${y} ${z}`);
+    a.setAttribute('radius',s);
+    a.setAttribute('color',cols[Math.floor(Math.random()*cols.length)]);
+    a.setAttribute('material','roughness:1');
+    belt.appendChild(a);
+  }
 });
 
-// ── Marker found / lost hints ─────────────────────────────────────────────────
-const hint = document.getElementById('hint');
-document.getElementById('main-marker').addEventListener('markerFound', () => {
-  hint.style.opacity = '0';
-});
-document.getElementById('main-marker').addEventListener('markerLost', () => {
-  hint.style.opacity = '1';
-  closeCard();
+// ═══════════════════════════════
+// PLANET CLICK → PANEL
+// ═══════════════════════════════
+document.querySelectorAll('.planet').forEach(el=>{
+  el.addEventListener('click',()=>{ openPanel(el.id); });
 });
 
-// ── Hiro marker modal ─────────────────────────────────────────────────────────
-function toggleMarkerModal() {
-  document.getElementById('marker-modal').classList.toggle('open');
+function openPanel(id){
+  const d=DB[id]; if(!d) return;
+  document.getElementById('pp-name').textContent=d.name;
+  document.getElementById('pp-type').textContent=d.type;
+  document.getElementById('pp-order').textContent=d.order;
+
+  // stats
+  document.getElementById('stat-grid').innerHTML=d.stats.map(s=>
+    `<div class="sc"><div class="sc-lbl">${s.l}</div><div class="sc-val">${s.v}</div><div class="sc-cmp">${s.c}</div></div>`
+  ).join('');
+
+  // gravity
+  const gp=Math.min((d.gravity/2.53)*100,100);
+  document.getElementById('gbar').style.width=gp+'%';
+  document.getElementById('gval').textContent=d.gravity.toFixed(2)+'g';
+  document.getElementById('gnote').textContent=d.gnote;
+  document.getElementById('overview-note').textContent=d.onote;
+
+  // atmosphere
+  document.getElementById('atm-bars').innerHTML=d.atm.map(a=>
+    `<div class="arow"><div class="arow-top"><span class="agas">${a.g}</span><span class="apct">${a.p}%</span></div><div class="abg"><div class="afill" style="width:${Math.min(a.p,100)}%;background:${a.c}"></div></div></div>`
+  ).join('');
+  document.getElementById('atm-fact').textContent=d.afact;
+
+  // moons
+  let mhtml;
+  if(!d.moons.length){
+    mhtml=`<div style="text-align:center;padding:28px 0"><div style="font-size:28px;margin-bottom:8px">🌑</div><div style="font-size:14px;color:rgba(255,255,255,0.6)">${d.mfooter}</div></div>`;
+  } else {
+    mhtml=`<p class="sec-head" style="margin-bottom:10px">Notable Moons</p>
+    <table class="mtbl"><thead><tr><th>Moon</th><th>Distance</th><th>Period</th><th>Notable for</th></tr></thead><tbody>
+    ${d.moons.map(m=>`<tr><td>${m.n}</td><td>${m.d}</td><td>${m.p}</td><td>${m.f}</td></tr>`).join('')}
+    </tbody></table><p class="moon-footer">${d.mfooter}</p>`;
+  }
+  document.getElementById('moons-div').innerHTML=mhtml;
+
+  // missions
+  document.getElementById('miss-list').innerHTML=d.missions.map(m=>
+    `<div class="mitem"><div class="mdot"></div><div><div style="display:flex;gap:8px;align-items:baseline"><span class="myear">${m.y}</span><span class="mname">${m.n}</span></div><div class="mdesc">${m.d}</div></div></div>`
+  ).join('');
+
+  // facts
+  document.getElementById('facts-div').innerHTML=d.facts.map((f,i)=>
+    `<div class="fcard"><div class="fnum">Fact ${i+1} of ${d.facts.length}</div><div class="ftxt">${f}</div></div>`
+  ).join('');
+
+  switchTab('overview');
+  document.getElementById('info-panel').classList.add('open');
 }
 
-// ── Orbit speed control ───────────────────────────────────────────────────────
-function updateSpeed(val) {
-  const multiplier = parseFloat(val);
-  document.getElementById('speed-label').textContent = multiplier.toFixed(1) + '×';
+function closePanel(){ document.getElementById('info-panel').classList.remove('open'); }
 
-  document.querySelectorAll('.orbit').forEach(el => {
-    const baseDur = parseInt(el.dataset.baseDur);
-    const newDur = Math.round(baseDur / multiplier);
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>{
+    el.classList.toggle('on',['overview','atmosphere','moons','missions','facts'][i]===t);
+  });
+  document.querySelectorAll('.tc').forEach(el=>el.classList.remove('on'));
+  document.getElementById('tc-'+t).classList.add('on');
+}
 
-    // Restart animation with new duration
-    const anim = el.getAttribute('animation');
+// ═══════════════════════════════
+// MARKER STATUS
+// ═══════════════════════════════
+const mkr=document.getElementById('main-marker');
+const hs=document.getElementById('hud-status');
+mkr.addEventListener('markerFound',()=>{ hs.textContent='✦ Marker locked — solar system active'; hs.classList.add('live'); });
+mkr.addEventListener('markerLost',()=>{ hs.textContent='Searching for marker...'; hs.classList.remove('live'); closePanel(); });
+
+// ═══════════════════════════════
+// SPEED
+// ═══════════════════════════════
+function updateSpeed(v){
+  const m=parseFloat(v);
+  document.getElementById('speed-val').textContent=m.toFixed(1)+'×';
+  document.querySelectorAll('.orbit').forEach(el=>{
+    const dur=Math.round(parseInt(el.dataset.baseDur)/m);
     el.removeAttribute('animation');
-    setTimeout(() => {
-      el.setAttribute('animation', {
-        ...anim,
-        property: 'rotation',
-        to: '0 360 0',
-        dur: newDur,
-        loop: true,
-        easing: 'linear',
-      });
-    }, 50);
+    setTimeout(()=>el.setAttribute('animation',`property:rotation;to:0 360 0;dur:${dur};loop:true;easing:linear`),30);
   });
 }
-</script>
 
+// ═══════════════════════════════
+// LABELS / RINGS TOGGLE
+// ═══════════════════════════════
+let labOn=true, ringOn=true;
+function toggleLabels(){
+  labOn=!labOn;
+  document.getElementById('lbtn').classList.toggle('on',labOn);
+  document.querySelectorAll('.plabel').forEach(el=>el.setAttribute('visible',labOn));
+}
+function toggleRings(){
+  ringOn=!ringOn;
+  document.getElementById('rbtn').classList.toggle('on',ringOn);
+  document.getElementById('orings').setAttribute('visible',ringOn);
+}
+
+// ═══════════════════════════════
+// MARKER MODAL
+// ═══════════════════════════════
+function toggleModal(){ document.getElementById('mmodal').classList.toggle('open'); }
+</script>
 </body>
 </html>
